@@ -3,7 +3,7 @@ project:
   title:        "Siliconimist Demoscene"
   author:       "John Cole - Siliconimist"
   discord:      "johnisleaping_24391"
-  description:  "Bouncing Siliconimist logo on rasterbars with PWM chiptune"
+  description:  "Bouncing Siliconimist logo on rasterbars with Korobeiniki chiptune"
   language:     "Verilog"
   clock_hz:     25175000
 

@@ -14,15 +14,15 @@ The Siliconimist demo is a 1x1-tile demoscene entry built on the VGA Playground 
 - A 128x128 bitmap ROM holds a 1-bit Siliconimist sprite: a silicon wafer (circle with an 8x8 grid of die outlines) above a bold "SILICONIMIST" wordmark.
 - The sprite bounces around the screen, ricocheting off all four edges. Each bounce advances a 3-bit color index that recolors the sprite ink from an 8-entry palette.
 - Behind the sprite, 16-pixel-tall rasterbars cycle vertically once per frame, picking colors from the same palette indexed by `pix_y[6:4] + frame_counter[5:3]`.
-- A small square-wave synth (`chiptune.v`) plays a 4-note arpeggio (C4, E4, G4, C5), advancing one note every ~60 frames (~1 second). The 1-bit output drives `uio[7]` directly.
+- A small square-wave synth (`chiptune.v`) plays the [Korobeiniki](https://en.wikipedia.org/wiki/Korobeiniki) melody (Tetris Type A theme) from the Wikipedia LilyPond transcription. The tune is stored as a 96-entry × 4-bit ROM of eighth-note pitch indices (12 measures of 4/4) and runs at ~150 BPM (12 vsync frames per eighth-note), looping every ~19 s. The 1-bit output drives `uio[7]` directly.
 
-The audio output is a 1-bit square wave at the note's fundamental frequency (~261–523 Hz), not a high-frequency PWM carrier. The TT Audio Pmod's low-pass filter and AC coupling pass these audio-band signals through directly, and the piezo output path on the Pmod has no further filtering. This produces chiptune-style square-wave tones similar to a Game Boy or NES voice channel.
+The audio output is a 1-bit square wave at the current note's fundamental frequency (~330–880 Hz across the song's E4–A5 range), not a high-frequency PWM carrier. The TT Audio Pmod's low-pass filter and AC coupling pass these audio-band signals through directly, and the piezo output path on the Pmod has no further filtering. This produces chiptune-style square-wave tones similar to a Game Boy or NES voice channel.
 
 ## How to test
 
 1. Plug a TinyVGA Pmod ([mole99/tiny-vga](https://github.com/mole99/tiny-vga)) into the dedicated-output Pmod bank and connect a VGA monitor.
 2. Plug a TT Audio Pmod ([MichaelBell/tt-audio-pmod](https://github.com/MichaelBell/tt-audio-pmod)) into the bidirectional Pmod bank — its input is on `uio[7]`.
-3. Pulse `rst_n` low briefly. The Siliconimist sprite should appear bouncing on a moving rasterbar background; the Pmod should play a slow C-major arpeggio.
+3. Pulse `rst_n` low briefly. The Siliconimist sprite should appear bouncing on a moving rasterbar background; the Pmod should play Korobeiniki (Tetris theme) on a loop.
 4. Toggle `ui[1]` to enable per-bounce color cycling (otherwise the sprite is white).
 5. Toggle `ui[0]` to tile the sprite full-screen (handy for confirming the bitmap data).
 6. Hold `ui[2]` high to mute the audio output.

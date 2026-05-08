@@ -5,7 +5,7 @@
 A 1x1-tile demoscene entry for the TTSKY26a Tiny Tapeout shuttle by **Siliconimist**.
 
 - VGA output on the [TinyVGA Pmod](https://github.com/mole99/tiny-vga) (`uo[7:0]`): bouncing 128x128 Siliconimist sprite (silicon wafer + "SILICONIMIST" wordmark) on top of cycling 16-pixel rasterbars.
-- 1-bit square-wave chiptune (4-note C-major arpeggio) on `uio[7]` for the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod).
+- 1-bit square-wave chiptune playing [Korobeiniki](https://en.wikipedia.org/wiki/Korobeiniki) (Tetris Type A theme) on `uio[7]` for the [TT Audio Pmod](https://github.com/MichaelBell/tt-audio-pmod).
 
 Pinout follows the official [Tiny Tapeout pinouts spec](https://tinytapeout.com/specs/pinouts/) — TinyVGA on the dedicated-output Pmod bank, TT Audio Pmod on the bidirectional Pmod bank.
 
