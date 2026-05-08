@@ -93,22 +93,20 @@ module tt_um_siliconimist (
       .pixel(pixel_value)
   );
 
-  // Rasterbars: 16-pixel-tall bands rotating orange -> white -> blue -> ...
-  // mod 3. Adding frame_counter to pix_y scrolls the whole pattern upward at
-  // 1 pixel per VGA frame (~60 px/s). 9-bit add: the carry-out is irrelevant
-  // for visible pixels (pix_y < 480 means pix_y[8:0] == pix_y), and during
-  // back porch R/G/B are forced to 0 anyway.
-  wire [8:0] scroll_y    = pix_y[8:0] + frame_counter[8:0];
-  wire [4:0] bar_phase   = scroll_y[8:4];
-  wire [3:0] pos_in_bar  = scroll_y[3:0];   // 0 = top of bar, 15 = bottom
+  // Rasterbars: 32-pixel-tall bands rotating orange -> white -> blue -> ...
+  // Scroll at 2px/frame (frame_counter*2) so apparent speed matches the old
+  // 16px-bar / 1px-per-frame design.  9-bit arithmetic wraps naturally.
+  wire [8:0] scroll_y   = pix_y[8:0] + {frame_counter[7:0], 1'b0};
+  wire [3:0] bar_phase  = scroll_y[8:5];   // which 32-px band (0-15)
+  wire [4:0] pos_in_bar = scroll_y[4:0];   // position within band (0-31)
 
   reg  [1:0] bar_state;
   always @(*) begin
     case (bar_phase)
-      5'd0,5'd3,5'd6,5'd9, 5'd12,5'd15,5'd18,5'd21,5'd24,5'd27,5'd30: bar_state = `PAL_ORANGE;
-      5'd1,5'd4,5'd7,5'd10,5'd13,5'd16,5'd19,5'd22,5'd25,5'd28,5'd31: bar_state = `PAL_WHITE;
-      5'd2,5'd5,5'd8,5'd11,5'd14,5'd17,5'd20,5'd23,5'd26,5'd29:       bar_state = `PAL_BLUE;
-      default:                                                         bar_state = `PAL_ORANGE;
+      4'd0,4'd3,4'd6,4'd9, 4'd12,4'd15: bar_state = `PAL_ORANGE;
+      4'd1,4'd4,4'd7,4'd10,4'd13:       bar_state = `PAL_WHITE;
+      4'd2,4'd5,4'd8,4'd11,4'd14:       bar_state = `PAL_BLUE;
+      default:                           bar_state = `PAL_ORANGE;
     endcase
   end
 
@@ -130,15 +128,16 @@ module tt_um_siliconimist (
     endcase
   end
 
-  // Each 16-tall bar fades from its primary color at the top edge to black
-  // at the bottom edge: P(black) = pos_in_bar / 16. The Bayer threshold turns
-  // that probability into a stable per-pixel decision so adjacent bars get a
-  // bright "highlight" line and a darker shadow toward the bottom.
-  wire [1:0] dithered_bar = (pos_in_bar > bayer) ? `PAL_BLACK : bar_state;
+  // Center-peaked brightness: dark at both edges, bright at the bar center.
+  // pos_in_bar runs 0..31; the MSB splits it into two halves and the lower
+  // 4 bits ramp 0→15 then back 15→0, giving a symmetric "neon tube" glow.
+  wire [3:0] brightness = pos_in_bar[4] ? (4'd15 - pos_in_bar[3:0])
+                                        :              pos_in_bar[3:0];
+  wire [1:0] dithered_bar = (brightness > bayer) ? bar_state : `PAL_BLACK;
 
-  // Sprite ink is always black; everywhere else uses the dithered bar color.
+  // Logo ink is white so it stands out against all three bar colors.
   wire show_logo_ink = logo_pixels && pixel_value;
-  wire [1:0] active_index = show_logo_ink ? `PAL_BLACK : dithered_bar;
+  wire [1:0] active_index = show_logo_ink ? `PAL_WHITE : dithered_bar;
 
   palette palette_inst (
       .color_index(active_index),

@@ -41,11 +41,5 @@ TOPLEVEL = tb
 # List test modules to run, separated by commas and without the .py suffix:
 COCOTB_TEST_MODULES = test
 
-# Simulated duration for test.capture_audio -> output/audio.wav (milliseconds).
-# Defaults to ~4 s of audio (~8x former 500 ms sim time for that test alone).
-# Quick run: make AUDIO_SIM_MS=500
-AUDIO_SIM_MS ?= 4000
-export AUDIO_SIM_MS
-
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
