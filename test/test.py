@@ -5,6 +5,8 @@ from cocotb.triggers import ClockCycles
 import os
 import glob
 import itertools
+import struct
+import wave
 from PIL import Image, ImageChops
 
 
@@ -111,6 +113,98 @@ async def test_project(dut):
     for i in range(CAPTURE_FRAMES):
         frame = await capture_frame(i)
         frame.save(f"output/frame{i}.png")
+
+
+@cocotb.test()
+async def capture_audio(dut):
+    """Sample uio_out[7] (audio) at ~98 kHz for 500 ms of sim time and write
+    a 16-bit PCM WAV file plus a CSV of the 1-bit raw values. Lets us inspect
+    what the chiptune actually produces under the time-division mix."""
+
+    CLOCK_PERIOD_NS = 40           # 25 MHz
+    DECIMATION = 256               # sample every 256 clk cycles -> 97.66 kHz
+    SIM_MS = 500
+    TOTAL_CYCLES = SIM_MS * 1_000_000 // CLOCK_PERIOD_NS
+    NUM_SAMPLES = TOTAL_CYCLES // DECIMATION
+
+    clock = Clock(dut.clk, CLOCK_PERIOD_NS, unit="ns")
+    cocotb.start_soon(clock.start())
+
+    dut.ena.value = 1
+    dut.ui_in.value = 0
+    dut.uio_in.value = 0
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 2)
+
+    os.makedirs("output", exist_ok=True)
+
+    samples = bytearray()                      # 1 byte per sample, 0 or 1
+    last_bit = None
+    edges = []                                 # cycle indices of each transition
+    for i in range(NUM_SAMPLES):
+        bit = int(dut.uio_out.value[7])
+        samples.append(bit)
+        if last_bit is not None and bit != last_bit:
+            edges.append(i * DECIMATION)
+        last_bit = bit
+        await ClockCycles(dut.clk, DECIMATION)
+
+    sample_rate_hz = 1_000_000_000 / (CLOCK_PERIOD_NS * DECIMATION)
+    duration_ms = NUM_SAMPLES / sample_rate_hz * 1000
+
+    # Stats
+    ones = sum(samples)
+    zeros = NUM_SAMPLES - ones
+    duty = ones / NUM_SAMPLES if NUM_SAMPLES else 0.0
+    edges_per_sec = len(edges) / (duration_ms / 1000) if duration_ms else 0.0
+
+    dut._log.info(
+        "AUDIO: %d samples @ %.1f kHz over %.1f ms; duty=%.1f%% ones=%d zeros=%d "
+        "transitions=%d (%.0f/s)",
+        NUM_SAMPLES, sample_rate_hz / 1000, duration_ms, duty * 100,
+        ones, zeros, len(edges), edges_per_sec,
+    )
+
+    # Per-frame duty cycle to spot envelope shape (1 frame = 16.67 ms ~= 1628 samples)
+    samples_per_frame = int(sample_rate_hz / 60)
+    frame_lines = []
+    for f in range(min(20, NUM_SAMPLES // samples_per_frame)):
+        chunk = samples[f * samples_per_frame:(f + 1) * samples_per_frame]
+        d = sum(chunk) / len(chunk) if chunk else 0
+        frame_lines.append(f"  frame {f:2d}: duty={d * 100:5.1f}%  ones={sum(chunk):4d}/{len(chunk)}")
+    dut._log.info("AUDIO per-frame duty:\n" + "\n".join(frame_lines))
+
+    # 16-bit PCM WAV: scale 0/1 to -16384/+16384
+    pcm = bytearray()
+    for b in samples:
+        v = 16384 if b else -16384
+        pcm += struct.pack("<h", v)
+    with wave.open("output/audio.wav", "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(int(sample_rate_hz))
+        w.writeframes(bytes(pcm))
+
+    # Edge intervals -> dominant audio period(s)
+    if len(edges) >= 2:
+        deltas = [edges[i + 1] - edges[i] for i in range(len(edges) - 1)]
+        # 25 MHz clock; convert clk-cycle delta to Hz
+        freqs_hz = [25_000_000 / (2 * d) for d in deltas if d > 0]
+        if freqs_hz:
+            avg = sum(freqs_hz) / len(freqs_hz)
+            dut._log.info(
+                "AUDIO: %d edges, avg implied half-period freq=%.0f Hz "
+                "(min=%.0f max=%.0f)",
+                len(edges), avg, min(freqs_hz), max(freqs_hz),
+            )
+
+    # Dump CSV of (cycle_index, bit) for first 20k samples for offline analysis
+    with open("output/audio.csv", "w") as f:
+        f.write("sample_index,clk_cycle,bit\n")
+        for i, b in enumerate(samples[:20000]):
+            f.write(f"{i},{i * DECIMATION},{b}\n")
 
 
 @cocotb.test()
