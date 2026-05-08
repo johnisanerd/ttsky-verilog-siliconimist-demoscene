@@ -116,6 +116,10 @@ async def test_project(dut):
 @cocotb.test()
 async def compare_reference(dut):
 
+    if not os.path.isdir("reference"):
+        dut._log.info("No reference/ directory; skipping reference comparison")
+        return
+
     for img in glob.glob("output/frame*.png"):
         basename = img.removeprefix("output/")
         dut._log.info(f"Comparing {basename} to reference image")
