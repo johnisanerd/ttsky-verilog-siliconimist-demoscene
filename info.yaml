@@ -28,7 +28,7 @@ project:
 pinout:
   # Inputs
   ui[0]: "cfg_tile (debug: tile sprite)"
-  ui[1]: "cfg_color (cycle sprite color)"
+  ui[1]: ""
   ui[2]: "mute (force audio low)"
   ui[3]: ""
   ui[4]: ""

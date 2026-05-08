@@ -7,11 +7,19 @@
 
 `default_nettype none
 
-parameter LOGO_SIZE = 128;       // Sprite size in pixels (square)
-parameter DISPLAY_WIDTH = 640;   // VGA display width
-parameter DISPLAY_HEIGHT = 480;  // VGA display height
+parameter LOGO_SIZE = 128;        // Native (ROM) sprite size in pixels (square)
+parameter LOGO_SCALE_LOG2 = 1;    // On-screen scale: 0 = 1x (128px), 1 = 2x (256px),
+                                  // 2 = 4x (512px). 4x does NOT fit a 480-line display.
+parameter DISPLAY_WIDTH = 640;
+parameter DISPLAY_HEIGHT = 480;
 
-`define COLOR_WHITE 3'd7
+localparam EFFECTIVE_LOGO_SIZE = LOGO_SIZE << LOGO_SCALE_LOG2;
+
+// Palette indices (kept in sync with src/palette.v)
+`define PAL_ORANGE 2'd0
+`define PAL_WHITE  2'd1
+`define PAL_BLUE   2'd2
+`define PAL_BLACK  2'd3
 
 module tt_um_siliconimist (
     input  wire [7:0] ui_in,    // Dedicated inputs
@@ -36,7 +44,6 @@ module tt_um_siliconimist (
 
   // Configuration switches on ui_in
   wire cfg_tile  = ui_in[0];  // tile the sprite full-screen (debug)
-  wire cfg_color = ui_in[1];  // color-cycle the sprite ink (else white)
   wire mute      = ui_in[2];  // force PWM audio low
 
   // TinyVGA Pmod pinout on uo_out (https://github.com/mole99/tiny-vga):
@@ -50,7 +57,7 @@ module tt_um_siliconimist (
   assign uio_out = {audio_out, 7'b0000000};
   assign uio_oe  = 8'b1000_0000;
 
-  wire _unused_ok = &{ena, ui_in[7:3], uio_in};
+  wire _unused_ok = &{ena, ui_in[7:3], ui_in[1], uio_in};
 
   reg [9:0] prev_y;
 
@@ -68,7 +75,6 @@ module tt_um_siliconimist (
   reg  [9:0] logo_top;
   reg        dir_x;
   reg        dir_y;
-  reg  [2:0] color_index;
   reg  [9:0] frame_counter;
 
   wire        pixel_value;
@@ -76,22 +82,36 @@ module tt_um_siliconimist (
 
   wire [9:0] x = pix_x - logo_left;
   wire [9:0] y = pix_y - logo_top;
-  wire logo_pixels = cfg_tile || (x[9:7] == 0 && y[9:7] == 0);
+  wire logo_pixels = cfg_tile ||
+      (x < EFFECTIVE_LOGO_SIZE && y < EFFECTIVE_LOGO_SIZE);
 
+  // Pixel-double the sprite by dropping LOGO_SCALE_LOG2 low bits before the
+  // ROM lookup; one ROM pixel covers a (2^LOGO_SCALE_LOG2) screen square.
   bitmap_rom rom1 (
-      .x(x[6:0]),
-      .y(y[6:0]),
+      .x(x[6+LOGO_SCALE_LOG2:LOGO_SCALE_LOG2]),
+      .y(y[6+LOGO_SCALE_LOG2:LOGO_SCALE_LOG2]),
       .pixel(pixel_value)
   );
 
-  // Rasterbar background: 16-pixel-tall bands cycling vertically with frame_counter
-  wire [2:0] bar_index = pix_y[6:4] + frame_counter[5:3];
+  // Rasterbars: 16-pixel-tall bands rotating orange -> white -> blue -> ...
+  // mod 3. Adding frame_counter to pix_y scrolls the whole pattern upward at
+  // 1 pixel per VGA frame (~60 px/s). To scroll faster, replace `frame_counter`
+  // below with e.g. `(frame_counter << 1)`; to scroll downward, subtract.
+  wire [9:0] scroll_y  = pix_y + frame_counter;
+  wire [4:0] bar_phase = scroll_y[8:4];
+  reg  [1:0] bar_state;
+  always @(*) begin
+    case (bar_phase)
+      5'd0,5'd3,5'd6,5'd9, 5'd12,5'd15,5'd18,5'd21,5'd24,5'd27,5'd30: bar_state = `PAL_ORANGE;
+      5'd1,5'd4,5'd7,5'd10,5'd13,5'd16,5'd19,5'd22,5'd25,5'd28,5'd31: bar_state = `PAL_WHITE;
+      5'd2,5'd5,5'd8,5'd11,5'd14,5'd17,5'd20,5'd23,5'd26,5'd29:       bar_state = `PAL_BLUE;
+      default:                                                         bar_state = `PAL_ORANGE;
+    endcase
+  end
 
-  // Sprite ink shows logo color on top of rasterbars; transparent pixels show bars
+  // Sprite ink is always black; everywhere else uses the rotating bar color.
   wire show_logo_ink = logo_pixels && pixel_value;
-  wire [2:0] active_index =
-      show_logo_ink ? (cfg_color ? color_index : `COLOR_WHITE)
-                    : bar_index;
+  wire [1:0] active_index = show_logo_ink ? `PAL_BLACK : bar_state;
 
   palette palette_inst (
       .color_index(active_index),
@@ -124,7 +144,6 @@ module tt_um_siliconimist (
       logo_top      <= 200;
       dir_y         <= 0;
       dir_x         <= 1;
-      color_index   <= 0;
       frame_counter <= 0;
       prev_y        <= 0;
     end else begin
@@ -133,22 +152,10 @@ module tt_um_siliconimist (
         frame_counter <= frame_counter + 1;
         logo_left     <= logo_left + (dir_x ? 1 : -1);
         logo_top      <= logo_top  + (dir_y ? 1 : -1);
-        if (logo_left - 1 == 0 && !dir_x) begin
-          dir_x       <= 1;
-          color_index <= color_index + 1;
-        end
-        if (logo_left + 1 == DISPLAY_WIDTH - LOGO_SIZE && dir_x) begin
-          dir_x       <= 0;
-          color_index <= color_index + 1;
-        end
-        if (logo_top - 1 == 0 && !dir_y) begin
-          dir_y       <= 1;
-          color_index <= color_index + 1;
-        end
-        if (logo_top + 1 == DISPLAY_HEIGHT - LOGO_SIZE && dir_y) begin
-          dir_y       <= 0;
-          color_index <= color_index + 1;
-        end
+        if (logo_left - 1 == 0 && !dir_x) dir_x <= 1;
+        if (logo_left + 1 == DISPLAY_WIDTH  - EFFECTIVE_LOGO_SIZE && dir_x) dir_x <= 0;
+        if (logo_top  - 1 == 0 && !dir_y) dir_y <= 1;
+        if (logo_top  + 1 == DISPLAY_HEIGHT - EFFECTIVE_LOGO_SIZE && dir_y) dir_y <= 0;
       end
     end
   end

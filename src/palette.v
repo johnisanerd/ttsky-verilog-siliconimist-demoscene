@@ -1,27 +1,26 @@
 /*
  * Copyright (c) 2024 Tiny Tapeout LTD
  * SPDX-License-Identifier: Apache-2.0
- * Author: Uri Shaked
+ * Original by Uri Shaked; Siliconimist palette overlay.
+ *
+ * 2-bit-per-channel TinyVGA encodes each level as one of {0, 85, 170, 255},
+ * so brand colors are quantized to the closest 6-bit RRGGBB value.
  */
 
 `default_nettype none
 
 module palette (
-    input  wire [2:0] color_index,
+    input  wire [1:0] color_index,
     output wire [5:0] rrggbb
 );
 
-  reg [5:0] palette[7:0];
+  reg [5:0] palette[3:0];
 
   initial begin
-    palette[0] = 6'b001011;  // cyan
-    palette[1] = 6'b110110;  // pink
-    palette[2] = 6'b101101;  // green
-    palette[3] = 6'b111000;  // orange
-    palette[4] = 6'b110011;  // purple
-    palette[5] = 6'b011111;  // yellow
-    palette[6] = 6'b110001;  // red
-    palette[7] = 6'b111111;  // white
+    palette[0] = 6'b110100;  // orange   #FF6719 -> closest 2-bit ~#FF5500
+    palette[1] = 6'b111111;  // white    #FFFFFF
+    palette[2] = 6'b000001;  // blue     #14223C -> closest 2-bit ~#000055
+    palette[3] = 6'b000000;  // black    used for the logo ink
   end
 
   assign rrggbb = palette[color_index];
