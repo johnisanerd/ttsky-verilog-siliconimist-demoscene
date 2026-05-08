@@ -1,0 +1,11 @@
+[project]
+name = "siliconimist-demoscene"
+version = "0.1.0"
+description = "Siliconimist Demoscene entry into the Tiny Tapeout contest"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "cocotb>=2.0.1",
+    "pillow>=11.0.0",
+    "pytest>=9.0.3",
+]
