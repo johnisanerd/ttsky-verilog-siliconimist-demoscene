@@ -117,13 +117,16 @@ async def test_project(dut):
 
 @cocotb.test()
 async def capture_audio(dut):
-    """Sample uio_out[7] (audio) at ~98 kHz for 500 ms of sim time and write
-    a 16-bit PCM WAV file plus a CSV of the 1-bit raw values. Lets us inspect
-    what the chiptune actually produces under the time-division mix."""
+    """Sample uio_out[7] (audio) at ~98 kHz and write ``output/audio.wav``.
+
+    Simulation length is controlled by Makefile variable ``AUDIO_SIM_MS``
+    (default 4000 ms). Override: ``make AUDIO_SIM_MS=3500``.
+    Also writes ``output/audio.csv`` (first 20k samples only).
+    """
 
     CLOCK_PERIOD_NS = 40           # 25 MHz
-    DECIMATION = 256               # sample every 256 clk cycles -> 97.66 kHz
-    SIM_MS = 500
+    DECIMATION = 256               # sample every 256 clk cycles -> 97.65625 kHz
+    SIM_MS = int(os.environ.get("AUDIO_SIM_MS", "4000"))
     TOTAL_CYCLES = SIM_MS * 1_000_000 // CLOCK_PERIOD_NS
     NUM_SAMPLES = TOTAL_CYCLES // DECIMATION
 

@@ -32,6 +32,15 @@ make -B FST=
 
 This will generate `tb.vcd` instead of `tb.fst`.
 
+## Audio capture (`output/audio.wav`)
+
+`test.capture_audio` samples `uio_out[7]` and writes `output/audio.wav` (~97.656 kHz mono). Simulation length defaults to **4 seconds**:
+
+```sh
+make -B AUDIO_SIM_MS=3500    # ~3.5 s WAV
+make -B AUDIO_SIM_MS=500     # quicker capture for iteration
+```
+
 ## How to view the waveform file
 
 Using GTKWave

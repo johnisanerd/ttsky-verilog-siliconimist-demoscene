@@ -27,7 +27,8 @@ jobs:
         run: |
           cd test
           make clean
-          make
+          # Shorter WAV in CI (~500 ms capture); local default Makefile is 4000 ms
+          make AUDIO_SIM_MS=500
           # make will return success even if the test fails, so check for failure in the results.xml
           ! grep failure results.xml
 
