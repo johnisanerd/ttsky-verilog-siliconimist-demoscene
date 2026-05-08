@@ -27,9 +27,9 @@ project:
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
   # Inputs
-  ui[0]: "cfg_tile (debug: tile sprite)"
+  ui[0]: "cfg_tile (tiles the logo)"
   ui[1]: ""
-  ui[2]: "mute (force audio low)"
+  ui[2]: "mute (mutes the audio)"
   ui[3]: ""
   ui[4]: ""
   ui[5]: ""
