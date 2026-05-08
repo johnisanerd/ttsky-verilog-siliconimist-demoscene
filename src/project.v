@@ -95,10 +95,13 @@ module tt_um_siliconimist (
 
   // Rasterbars: 16-pixel-tall bands rotating orange -> white -> blue -> ...
   // mod 3. Adding frame_counter to pix_y scrolls the whole pattern upward at
-  // 1 pixel per VGA frame (~60 px/s). To scroll faster, replace `frame_counter`
-  // below with e.g. `(frame_counter << 1)`; to scroll downward, subtract.
-  wire [9:0] scroll_y  = pix_y + frame_counter;
-  wire [4:0] bar_phase = scroll_y[8:4];
+  // 1 pixel per VGA frame (~60 px/s). 9-bit add: the carry-out is irrelevant
+  // for visible pixels (pix_y < 480 means pix_y[8:0] == pix_y), and during
+  // back porch R/G/B are forced to 0 anyway.
+  wire [8:0] scroll_y    = pix_y[8:0] + frame_counter[8:0];
+  wire [4:0] bar_phase   = scroll_y[8:4];
+  wire [3:0] pos_in_bar  = scroll_y[3:0];   // 0 = top of bar, 15 = bottom
+
   reg  [1:0] bar_state;
   always @(*) begin
     case (bar_phase)
@@ -109,9 +112,33 @@ module tt_um_siliconimist (
     endcase
   end
 
-  // Sprite ink is always black; everywhere else uses the rotating bar color.
+  // 4x4 Bayer ordered-dither matrix indexed by (pix_y[1:0], pix_x[1:0]).
+  // The TinyVGA Pmod is 2 bits per channel (4 levels per channel), so true
+  // smooth gradients are impossible -- we fake intermediate brightnesses
+  // between bar_state and PAL_BLACK with a stable 4x4 stipple instead.
+  reg [3:0] bayer;
+  always @(*) begin
+    case ({pix_y[1:0], pix_x[1:0]})
+      4'b00_00: bayer = 4'd0;   4'b00_01: bayer = 4'd8;
+      4'b00_10: bayer = 4'd2;   4'b00_11: bayer = 4'd10;
+      4'b01_00: bayer = 4'd12;  4'b01_01: bayer = 4'd4;
+      4'b01_10: bayer = 4'd14;  4'b01_11: bayer = 4'd6;
+      4'b10_00: bayer = 4'd3;   4'b10_01: bayer = 4'd11;
+      4'b10_10: bayer = 4'd1;   4'b10_11: bayer = 4'd9;
+      4'b11_00: bayer = 4'd15;  4'b11_01: bayer = 4'd7;
+      4'b11_10: bayer = 4'd13;  4'b11_11: bayer = 4'd5;
+    endcase
+  end
+
+  // Each 16-tall bar fades from its primary color at the top edge to black
+  // at the bottom edge: P(black) = pos_in_bar / 16. The Bayer threshold turns
+  // that probability into a stable per-pixel decision so adjacent bars get a
+  // bright "highlight" line and a darker shadow toward the bottom.
+  wire [1:0] dithered_bar = (pos_in_bar > bayer) ? `PAL_BLACK : bar_state;
+
+  // Sprite ink is always black; everywhere else uses the dithered bar color.
   wire show_logo_ink = logo_pixels && pixel_value;
-  wire [1:0] active_index = show_logo_ink ? `PAL_BLACK : bar_state;
+  wire [1:0] active_index = show_logo_ink ? `PAL_BLACK : dithered_bar;
 
   palette palette_inst (
       .color_index(active_index),

@@ -3,8 +3,8 @@
  *
  * Tiny chiptune square-wave synth for the Siliconimist demo.
  *
- * Plays "Korobeiniki" (the Tetris Type A theme) as a 1-bit square wave.
- * The melody is the Wikipedia LilyPond transcription:
+ * Plays "Korobeiniki" (Tetris Type A theme) as a 1-bit XOR-mixed two-voice
+ * square wave from the Wikipedia LilyPond transcription:
  *   https://en.wikipedia.org/wiki/Korobeiniki
  *   m1: e4. gis8 b4 gis8 e8     m2: a4. c8 e4 d8 c8
  *   m3: b4. c8 d4 e4            m4: c4 a4 a2
@@ -12,17 +12,34 @@
  *   m5: f'4. g8 a4 g8 f8        m6: e4. f8 e4 d8 c8
  *   m7: b4. c8 d4 e4            m8: c4 a4 a2 }
  *
- * Stored as 96 eighth-note slots (12 measures * 8) with a 4-bit pitch
- * index per slot. At 12 frame_tick pulses per slot (~150 BPM at 60 Hz
- * vsync), the song loops every ~19.2 s.
+ * Treble voice: 96 eighth-note slots (12 measures * 8) with a 4-bit pitch
+ *   index per slot. At 12 frame_tick pulses per slot (~150 BPM at 60 Hz
+ *   vsync), the song loops every ~19.2 s.
  *
- * Output is a 1-bit square wave at the current note's fundamental, fed
- * to the TT Audio Pmod (https://github.com/MichaelBell/tt-audio-pmod)
- * on uio[7] per the TT pinouts spec (https://tinytapeout.com/specs/pinouts/).
+ * Bass voice: one root note per measure (12 measures), playing the V/i
+ *   cadence of A minor an octave below the corresponding treble pitch.
+ *
+ * Per-note polish to fix the "scratchy / clicky" symptom of the previous
+ * arpeggio-only design:
+ *   - Phase-reset the treble tone counter on every pitch change so the new
+ *     note always starts at the beginning of a half-period (no click from a
+ *     mid-period divisor swap).
+ *   - Articulation gate: silence the treble for the first frame of every
+ *     step so tied repeated-pitch notes (e.g. m4 "A4 q + A4 h") get
+ *     re-articulated. Bass keeps playing through the gate so the harmonic
+ *     floor is continuous.
+ *   - Phase-reset the bass on bass-pitch change (measure boundary) for the
+ *     same reason as treble; same bass pitch across measures is left
+ *     uninterrupted.
+ *
+ * Output is XOR(treble_square, bass_square), wired to uio[7] for the
+ * TT Audio Pmod (https://github.com/MichaelBell/tt-audio-pmod) per the
+ * TT pinouts spec (https://tinytapeout.com/specs/pinouts/).
  *
  * Half-period divisors are sized for the 25.175 MHz VGA pixel clock:
  *   note_div = floor(clk_freq / (2 * note_freq)) - 1
- *   so the toggle period is (note_div + 1) clk cycles.
+ *   so the toggle period is (note_div + 1) clk cycles. Bass divisor for
+ *   "octave below treble" is bass_div = 2 * treble_div + 1.
  */
 
 `default_nettype none
@@ -41,7 +58,7 @@ module chiptune (
   reg [3:0] frame_in_step;          // 0..11
   reg [6:0] song_step;              // 0..95
 
-  // Song table: one 4-bit pitch index per eighth-note slot.
+  // Treble song table: one 4-bit pitch index per eighth-note slot.
   // Pitches: 0=E4 1=G#4 2=A4 3=B4 4=C5 5=D5 6=E5 7=F5 8=G5 9=A5
   reg [3:0] song [0:SONG_LEN-1];
   initial begin
@@ -81,8 +98,9 @@ module chiptune (
   end
 
   wire [3:0] cur_pitch = song[song_step];
+  wire [3:0] measure   = song_step[6:3];   // 0..11
 
-  // Pitch -> half-period divisor for a 25.175 MHz clock.
+  // Treble pitch -> half-period divisor for a 25.175 MHz clock.
   reg [15:0] note_div;
   always @(*) begin
     case (cur_pitch)
@@ -100,16 +118,59 @@ module chiptune (
     endcase
   end
 
+  // Bass: one root note per measure, A-minor V/i cadence. Korobeiniki sits
+  // on E (V) for measures 0/2/6/10 and A (i) for the rest. Encoded as a
+  // 6-minterm case rather than a separate 12-entry ROM.
+  reg [3:0] bass_pitch;
+  always @(*) begin
+    case (measure)
+      4'd0, 4'd2, 4'd6, 4'd10: bass_pitch = 4'd0;  // E (V chord root)
+      default:                 bass_pitch = 4'd2;  // A (i chord root)
+    endcase
+  end
+
+  // Bass divisor: one octave below the indexed pitch. By construction,
+  // bass_div = 2*treble_div + 1, which lines the bass period up at exactly
+  // double the treble period.
+  reg [16:0] bass_div;
+  always @(*) begin
+    case (bass_pitch)
+      4'd0:    bass_div = 17'd76369;  // E3 ~164.81 Hz
+      4'd2:    bass_div = 17'd57215;  // A3 ~220.00 Hz
+      default: bass_div = 17'd57215;
+    endcase
+  end
+
+  // Articulation: silence the treble for the first frame of each step so
+  // tied repeated-pitch notes get re-articulated. Bass is NOT gated so the
+  // harmonic floor is continuous through the gap.
+  wire articulating = (frame_in_step == 4'd0);
+
+  // Phase-change detectors (trim per-transition click).
+  reg [3:0] prev_pitch;
+  reg [3:0] prev_bass_pitch;
+  wire pitch_changed      = (cur_pitch  != prev_pitch);
+  wire bass_pitch_changed = (bass_pitch != prev_bass_pitch);
+
   reg [15:0] tone_counter;
   reg        square;
+  reg [16:0] bass_counter;
+  reg        bass_square;
 
   always @(posedge clk) begin
     if (~rst_n) begin
-      frame_in_step <= 0;
-      song_step     <= 0;
-      tone_counter  <= 0;
-      square        <= 0;
+      frame_in_step   <= 0;
+      song_step       <= 0;
+      tone_counter    <= 0;
+      square          <= 0;
+      bass_counter    <= 0;
+      bass_square     <= 0;
+      prev_pitch      <= 0;
+      prev_bass_pitch <= 0;
     end else begin
+      prev_pitch      <= cur_pitch;
+      prev_bass_pitch <= bass_pitch;
+
       if (frame_tick) begin
         if (frame_in_step == FRAMES_PER_STEP - 1) begin
           frame_in_step <= 0;
@@ -122,15 +183,36 @@ module chiptune (
         end
       end
 
-      if (tone_counter == 0) begin
+      // Treble oscillator with phase reset on pitch change.
+      if (pitch_changed) begin
+        tone_counter <= note_div;
+        square       <= 0;
+      end else if (tone_counter == 0) begin
         tone_counter <= note_div;
         square       <= ~square;
       end else begin
         tone_counter <= tone_counter - 1'b1;
       end
+
+      // Bass oscillator with phase reset on bass-pitch change (measure
+      // boundary, and only when the chord root actually swaps E <-> A).
+      if (bass_pitch_changed) begin
+        bass_counter <= bass_div;
+        bass_square  <= 0;
+      end else if (bass_counter == 0) begin
+        bass_counter <= bass_div;
+        bass_square  <= ~bass_square;
+      end else begin
+        bass_counter <= bass_counter - 1'b1;
+      end
     end
   end
 
-  assign audio = mute ? 1'b0 : square;
+  // Mix: classic 1-bit chiptune XOR. With one octave of separation between
+  // the voices the difference / sum components are octave-related, so the
+  // result reads as "two notes at once" rather than as interference.
+  wire treble_out = articulating ? 1'b0 : square;
+  wire mixed      = treble_out ^ bass_square;
+  assign audio    = mute ? 1'b0 : mixed;
 
 endmodule
