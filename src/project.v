@@ -191,6 +191,8 @@ module tt_um_siliconimist (
       .clk(clk),
       .rst_n(rst_n),
       .frame_tick(frame_tick),
+      .pix_x(pix_x),
+      .pix_y(pix_y),
       .mute(mute),
       .audio(audio_out)
   );
