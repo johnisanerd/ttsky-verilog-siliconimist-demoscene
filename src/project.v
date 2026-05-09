@@ -137,7 +137,27 @@ module tt_um_siliconimist (
 
   // Logo ink is white so it stands out against all three bar colors.
   wire show_logo_ink = logo_pixels && pixel_value;
-  wire [1:0] active_index = show_logo_ink ? `PAL_WHITE : dithered_bar;
+
+  // Scrolling "SILICONIMIST" marquee at the bottom of the screen.
+  // scroll_x advances 1 pixel per frame (60 px/s); the 256-px tiling period
+  // repeats ~2.5× across the 640-pixel width for a continuous marquee effect.
+  wire text_active;
+  wire text_pixel;
+  text_scroller marquee (
+      .pix_x  (pix_x),
+      .pix_y  (pix_y),
+      .scroll (frame_counter),
+      .pixel  (text_pixel),
+      .active (text_active)
+  );
+
+  // Compositing priority (highest to lowest):
+  //   1. Logo sprite (white ink over everything)
+  //   2. Scrolling text marquee (orange, demoscene branding)
+  //   3. Dithered rasterbars (background)
+  wire [1:0] active_index = show_logo_ink ? `PAL_WHITE  :
+                            text_pixel    ? `PAL_ORANGE :
+                                            dithered_bar;
 
   palette palette_inst (
       .color_index(active_index),

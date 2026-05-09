@@ -2,6 +2,14 @@
  * Copyright (c) 2024 Tiny Tapeout LTD
  * SPDX-License-Identifier: Apache-2.0
  * Author: Uri Shaked
+ *
+ * TODO: Replace the current globe wireframe graphic with a semiconductor
+ *       wafer-of-chips image to reinforce the semiconductor / ASIC design
+ *       theme of the Siliconimist project.  The wafer could be rendered
+ *       procedurally (concentric circles for the wafer disc + a regular
+ *       grid of die outlines) to reduce flip-flop usage vs. a raw bitmap.
+ *       The "SILICONIMIST" text that was previously embedded here has been
+ *       moved to src/text_scroller.v (font-ROM approach, ~39× smaller).
  */
 
 `default_nettype none
