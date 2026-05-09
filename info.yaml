@@ -21,6 +21,7 @@ project:
     - "hvsync_generator.v"
     - "palette.v"
     - "bitmap_rom.v"
+    - "text_scroller.v"
     - "chiptune.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.

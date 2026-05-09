@@ -116,7 +116,12 @@ module text_scroller (
   //  .XXX.   XXXXX   XXXXX   .XXX.   .XXX.   X...X   X...X   ..X..
 
   reg [4:0] font [0:127];
+  integer fi;
   initial begin
+    // Unwritten entries must be driven (otherwise font[] reads as X under Icarus
+    // simulation and XOR-masks through the marquee, breaking framebuffer tests).
+    for (fi = 0; fi < 128; fi = fi + 1)
+      font[fi] = 5'b00000;
     // --- Glyph 0: S ---
     font[{4'd0, 3'd0}] = 5'b01110;  // .XXX.
     font[{4'd0, 3'd1}] = 5'b10001;  // X...X
@@ -189,7 +194,7 @@ module text_scroller (
     font[{4'd7, 3'd5}] = 5'b00100;  // ..X..
     font[{4'd7, 3'd6}] = 5'b00100;  // ..X..
 
-    // --- Glyph 8: blank — all zeros (default reg initialisation) ---
+    // --- Glyph 8: blank — all-zero rows (initializer loop fills these) ---
   end
 
   // -------------------------------------------------------------------
