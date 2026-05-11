@@ -24,11 +24,12 @@ This drives 3 frames of VGA output through cocotb and saves them as PNGs in `tes
 
 ## Audio capture (`output/audio.wav`)
 
-`test.capture_audio` samples `uio_out[7]` and writes `output/audio.wav` (~97.656 kHz mono). Simulation length defaults to **4 seconds**:
+`test.capture_audio` samples `uio_out[7]` and writes `output/audio.wav` (~97.656 kHz mono, 8-bit PCM). It is **opt-in**: the test is skipped unless `AUDIO_SIM_MS` is set to a positive number of milliseconds.
 
 ```sh
 make -B AUDIO_SIM_MS=3500    # ~3.5 s WAV
 make -B AUDIO_SIM_MS=500     # quicker capture for iteration
+make -B                      # no AUDIO_SIM_MS -> audio capture is skipped
 ```
 
 ## How to view the waveform file

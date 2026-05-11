@@ -137,17 +137,33 @@ async def compare_reference(dut):
 async def capture_audio(dut):
     """Sample the 1-bit audio pin (uio_out[7]) and write output/audio.wav.
 
-    The DUT clock is 25 MHz and we sample once every 256 cycles, giving a
-    97_656.25 Hz mono PCM stream. Total simulated length is controlled by
-    the ``AUDIO_SIM_MS`` environment variable (default 4000 ms). Samples are
+    Opt-in: this test is skipped unless ``AUDIO_SIM_MS`` is set to a positive
+    integer number of milliseconds. The DUT clock is 25 MHz and we sample once
+    every 256 cycles, giving a 97_656.25 Hz mono PCM stream. Samples are
     written as 8-bit unsigned PCM, mapping the 1-bit pin to 0x00 / 0xFF.
+
+    Example:
+        make -B AUDIO_SIM_MS=3500    # capture ~3.5 s of audio
     """
+
+    raw = os.environ.get("AUDIO_SIM_MS", "").strip()
+    if not raw:
+        dut._log.info("AUDIO_SIM_MS not set; skipping audio capture")
+        return
+    try:
+        sim_ms = int(raw)
+    except ValueError:
+        dut._log.warning(
+            f"AUDIO_SIM_MS={raw!r} is not an integer; skipping audio capture"
+        )
+        return
+    if sim_ms <= 0:
+        dut._log.info(f"AUDIO_SIM_MS={sim_ms} <= 0; skipping audio capture")
+        return
 
     CLOCK_PERIOD_NS = 40                       # 25 MHz
     CLOCKS_PER_SAMPLE = 256                    # -> 97_656.25 Hz
     SAMPLE_RATE = 1_000_000_000 // (CLOCK_PERIOD_NS * CLOCKS_PER_SAMPLE)
-
-    sim_ms = int(os.environ.get("AUDIO_SIM_MS", "4000"))
     num_samples = (sim_ms * SAMPLE_RATE) // 1000
 
     clock = Clock(dut.clk, CLOCK_PERIOD_NS, unit="ns")
