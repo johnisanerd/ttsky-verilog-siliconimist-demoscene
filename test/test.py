@@ -5,6 +5,7 @@ from cocotb.triggers import ClockCycles
 import os
 import glob
 import itertools
+import wave
 from PIL import Image, ImageChops
 
 
@@ -130,3 +131,52 @@ async def compare_reference(dut):
         if diff.getbbox() is not None:
             diff.save(f"output/diff_{basename}")
             assert False, f"Rendered {basename} differs from reference image"
+
+
+@cocotb.test()
+async def capture_audio(dut):
+    """Sample the 1-bit audio pin (uio_out[7]) and write output/audio.wav.
+
+    The DUT clock is 25 MHz and we sample once every 256 cycles, giving a
+    97_656.25 Hz mono PCM stream. Total simulated length is controlled by
+    the ``AUDIO_SIM_MS`` environment variable (default 4000 ms). Samples are
+    written as 8-bit unsigned PCM, mapping the 1-bit pin to 0x00 / 0xFF.
+    """
+
+    CLOCK_PERIOD_NS = 40                       # 25 MHz
+    CLOCKS_PER_SAMPLE = 256                    # -> 97_656.25 Hz
+    SAMPLE_RATE = 1_000_000_000 // (CLOCK_PERIOD_NS * CLOCKS_PER_SAMPLE)
+
+    sim_ms = int(os.environ.get("AUDIO_SIM_MS", "4000"))
+    num_samples = (sim_ms * SAMPLE_RATE) // 1000
+
+    clock = Clock(dut.clk, CLOCK_PERIOD_NS, unit="ns")
+    cocotb.start_soon(clock.start())
+
+    dut.ena.value = 1
+    dut.ui_in.value = 0
+    dut.uio_in.value = 0
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 10)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 2)
+
+    dut._log.info(
+        f"Capturing {num_samples} audio samples "
+        f"({sim_ms} ms @ {SAMPLE_RATE} Hz) from uio_out[7]"
+    )
+
+    samples = bytearray(num_samples)
+    for i in range(num_samples):
+        await ClockCycles(dut.clk, CLOCKS_PER_SAMPLE)
+        samples[i] = 0xFF if int(dut.uio_out.value[7]) else 0x00
+
+    os.makedirs("output", exist_ok=True)
+    out_path = "output/audio.wav"
+    with wave.open(out_path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(1)
+        wav.setframerate(SAMPLE_RATE)
+        wav.writeframes(bytes(samples))
+
+    dut._log.info(f"Wrote {num_samples} samples (~{sim_ms} ms) to {out_path}")

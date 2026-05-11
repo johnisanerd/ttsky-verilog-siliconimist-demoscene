@@ -41,5 +41,9 @@ TOPLEVEL = tb
 # List test modules to run, separated by commas and without the .py suffix:
 COCOTB_TEST_MODULES = test
 
+# Propagate `make -B AUDIO_SIM_MS=...` into the cocotb subprocess environment
+# so test.capture_audio can read it.
+export AUDIO_SIM_MS
+
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
