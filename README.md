@@ -53,3 +53,11 @@ Tiny Tapeout is an educational project that aims to make it easier and cheaper t
 ## What is the Siliconimist?
 
 The Siliconimist is a podcast and blog about the science, economics, and background behind the semiconductor industry.  It is hosted by John Cole, a software engineer and entrepreneur who is passionate about the semiconductor industry.  You can find the podcast [here](https://www.siliconimist.com/).
+
+## What next?
+
+Now we wait.  The shuttle will take a few months, so all we have are hopes, prayers, and the smart engineers at Tiny Tapeout to make it work.  Thoughts and prayers to the team at Tiny Tapeout and Skyworks to make it work.
+
+Let's see if it works.
+
+[![Siliconimist Chip1](./docs/TheSiliconimist.png)](https://siliconimist.com)

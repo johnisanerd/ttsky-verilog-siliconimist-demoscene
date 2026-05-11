@@ -36,4 +36,6 @@ The pinout follows the official [Tiny Tapeout pinouts spec](https://tinytapeout.
 
 # More In-Depth Writeup
 
-Follow along at the the Siliconimist podcast and blog [here](https://siliconimist.com/) and hear our more dramatic, in-depth writeup about the design and our journey to a first tapeout!  
+I have a lot of thoughts on open source silicon, and I'm writing them up as I go, including what each stage does, what we found funny, and where I got stuck.  Check it out on [siliconimist.com](https://siliconimist.com).
+
+[![Siliconimist Chip1](TheSiliconimist.png)](https://siliconimist.com)
